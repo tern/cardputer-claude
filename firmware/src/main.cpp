@@ -51,6 +51,7 @@ std::deque<std::pair<String, uint16_t>> incoming;  // (text, colour) waiting to 
 volatile bool permPending = false;
 volatile long lastSeq = 0;
 volatile bool online = false;
+volatile uint32_t wifiGeneration = 0;  // bumped on every (re)join so HTTP clients drop stale sockets
 
 void enqueue(const String &text, uint16_t color) {
     xSemaphoreTake(stateMutex, portMAX_DELAY);
@@ -159,6 +160,7 @@ bool joinWifi(const String &ssid, const String &pass, int timeoutMs = 20000) {
         delay(250);
     }
     showLine("WiFi: " + WiFi.localIP().toString(), TFT_DARKGREY);
+    wifiGeneration++;
     return true;
 }
 
@@ -285,6 +287,13 @@ public:
     // Returns the HTTP status (or a negative HTTPClient error). Body in `out`.
     int request(const char *method, const String &path, const String &body, String &out, int timeoutMs) {
         WiFiClient &client = cfg.baseUrl.startsWith("https") ? static_cast<WiFiClient &>(tls) : plain;
+        // A keep-alive socket from a previous network would just hang until
+        // the timeout, so start fresh after a WiFi change.
+        if (generation != wifiGeneration) {
+            tls.stop();
+            plain.stop();
+            generation = wifiGeneration;
+        }
         http.setTimeout(timeoutMs);
         if (!http.begin(client, cfg.baseUrl + path)) return -100;
         http.addHeader("Authorization", "Bearer " + cfg.token);
@@ -304,6 +313,7 @@ private:
     WiFiClientSecure tls;
     WiFiClient plain;
     HTTPClient http;
+    uint32_t generation = 0;
 };
 
 Api apiUi;    // send / perm / ping, from the UI task
