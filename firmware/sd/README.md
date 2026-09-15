@@ -2,10 +2,13 @@
 
 Copy these two files to the root of a FAT32 microSD card in the Cardputer.
 
-`/wifi.txt`
+`/wifi.txt` — ssid / password line pairs, up to 8 networks, first match in range wins.
+Optional: the `:wifi` picker on the device writes this file for you.
 ```
 MyHotspotSSID
 hotspot-password
+HomeWifi
+home-password
 ```
 
 `/claude.txt`

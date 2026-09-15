@@ -46,7 +46,7 @@ tailscale funnel --bg 8790      # → https://<主機>.<tailnet>.ts.net
 ## Cardputer ADV 端
 
 1. microSD（FAT32）根目錄放兩個檔（範本在 `firmware/sd/`）：
-   - `/wifi.txt`：第 1 行 SSID、第 2 行密碼（手機熱點）
+   - `/wifi.txt`：SSID、密碼 兩行一組，可放多組（也可以不放，開機直接用 `:wifi` 選單設定）
    - `/claude.txt`：第 1 行 `https://<主機>.<tailnet>.ts.net`、第 2 行 token
 2. 燒錄：
    ```bash
@@ -60,7 +60,7 @@ tailscale funnel --bg 8790      # → https://<主機>.<tailnet>.ts.net
 | `y` / `n` | 回答最新的權限詢問 |
 | `:ping` | 顯示連到哪台主機、哪個目錄 |
 | `:clear` | 清畫面 |
-| `:wifi` | 重連 WiFi |
+| `:wifi` | 開 WiFi 選單：掃描 → `fn+;`/`fn+.` 上下 → Enter → 輸入密碼 → Enter；`` ` `` 返回。連上就存進 `/wifi.txt`（最多 8 組，開機自動挑有訊號的） |
 
 螢幕只有 240×135，plugin 已經在 MCP instructions 裡告訴 Claude：回覆要短、純文字、
 可用繁中；細節留在終端機或寫進檔案再告訴你位置。
