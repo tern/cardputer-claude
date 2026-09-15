@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Start Claude Code with the Cardputer channel attached.
+#
+# Third-party channel plugins are not on Claude Code's approved channel
+# allowlist, so they have to be loaded with the "development channels" flag;
+# Claude Code shows a one-time confirmation dialog at startup.
+#
+# Usage: claude-cardputer [any claude args...]
+#   e.g. claude-cardputer --remote-control
+set -euo pipefail
+exec claude --dangerously-load-development-channels plugin:cardputer@tern-mods "$@"

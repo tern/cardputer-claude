@@ -1,0 +1,12 @@
+{
+  "name": "tern-mods",
+  "owner": { "name": "tern" },
+  "metadata": { "description": "Tern's personal Claude Code mods" },
+  "plugins": [
+    {
+      "name": "cardputer",
+      "source": "./plugins/cardputer",
+      "description": "Channel: drive this Claude Code session from an M5Stack Cardputer ADV over HTTPS (Tailscale Funnel / Cloudflare tunnel)."
+    }
+  ]
+}

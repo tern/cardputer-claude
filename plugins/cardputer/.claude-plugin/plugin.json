@@ -1,0 +1,7 @@
+{
+  "name": "cardputer",
+  "description": "Channel plugin: messages from an M5Stack Cardputer ADV reach this session over HTTPS; replies and permission prompts go back to the device.",
+  "version": "0.1.0",
+  "author": { "name": "tern" },
+  "keywords": ["cardputer", "m5stack", "channel", "mcp", "remote"]
+}
