@@ -215,7 +215,13 @@ void pollTask(void *) {
 // ---- UI task -------------------------------------------------------------
 void ping() {
     String out;
-    int code = apiUi.request("GET", "/api/ping", "", out, 10000);
+    int code = -1;
+    // The first request right after WiFi comes up tends to fail (DNS / TLS
+    // not ready yet), so give it a few tries before reporting.
+    for (int attempt = 0; attempt < 3 && code < 0; ++attempt) {
+        if (attempt) delay(1000);
+        code = apiUi.request("GET", "/api/ping", "", out, 10000);
+    }
     if (code != 200) {
         showLine("! ping " + String(code) + " " + clip(out, 60), TFT_RED);
         return;
@@ -224,6 +230,9 @@ void ping() {
     if (!deserializeJson(doc, out)) {
         showLine(String("= ") + (const char *)(doc["host"] | "?") + ":" + (const char *)(doc["cwd"] | "?"), TFT_CYAN);
         if (doc["pending"].size() > 0) permPending = true;
+        // Fresh boot: replay only the last few events instead of the server's whole buffer.
+        long s = doc["seq"] | 0L;
+        if (lastSeq == 0 && s > 3) lastSeq = s - 3;
     }
 }
 
