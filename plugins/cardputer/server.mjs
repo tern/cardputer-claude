@@ -44,9 +44,20 @@ function loadToken() {
   return t
 }
 
+// stderr goes to Claude Code's MCP log; the file is for `tail -f` while debugging.
+const LOG_FILE = path.join(STATE_DIR, 'server.log')
 function log(msg) {
-  process.stderr.write(`cardputer: ${msg}\n`)
+  const line = `cardputer: ${msg}\n`
+  process.stderr.write(line)
+  try {
+    fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${line}`)
+  } catch {}
 }
+
+process.on('uncaughtException', err => log(`uncaught: ${err?.stack ?? err}`))
+process.on('unhandledRejection', err => log(`unhandled rejection: ${err?.stack ?? err}`))
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => { log(`exit on ${sig}`); process.exit(0) })
+process.on('exit', code => log(`exit code ${code}`))
 
 // ---------------------------------------------------------------------------
 // Event buffer + long-poll waiters. Everything the device should see
@@ -207,7 +218,10 @@ process.stdin.on('data', chunk => {
     }
   }
 })
-process.stdin.on('end', () => process.exit(0))
+process.stdin.on('end', () => {
+  log('stdin closed by Claude Code')
+  process.exit(0)
+})
 
 function deliver(text, meta = {}) {
   const message_id = `d${Date.now()}-${++msgCounter}`
