@@ -16,7 +16,7 @@ Cardputer ADV ──HTTPS──▶ funnel/tunnel ──▶ 127.0.0.1:8790 (serve
 Needs Node ≥ 18 on PATH (no npm packages).
 
 ```
-claude plugin marketplace add tern-yu/cardputer-claude    # or a local path to this repo
+claude plugin marketplace add tern/cardputer-claude    # or a local path to this repo
 claude plugin install cardputer@tern-mods
 ```
 

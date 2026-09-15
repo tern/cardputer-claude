@@ -19,7 +19,7 @@ Cardputer ADV ──HTTPS──▶ tailscale funnel ──▶ 127.0.0.1:8790 (se
 需求：Node ≥ 18、`claude` ≥ 2.1、Tailscale（或 cloudflared）。
 
 ```bash
-claude plugin marketplace add tern-yu/cardputer-claude   # 或本機路徑 ~/Projects/cardputer-claude
+claude plugin marketplace add tern/cardputer-claude   # 或本機路徑 ~/Projects/cardputer-claude
 claude plugin install cardputer@tern-mods
 ln -s "$(pwd)/plugins/cardputer/bin/claude-cardputer" ~/.local/bin/   # 放進 PATH
 
