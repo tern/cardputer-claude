@@ -13,7 +13,7 @@
 ## 已完成的最小驗證
 
 - Steam Deck 的 Tailscale 正在運作，Tailnet Lock 啟用；目前約 20 個節點。
-- 私人 `tailscale serve --bg 8790` 已設定。以本機測試 HTTP 服務驗證 `https://steamdeck.tailcb86e1.ts.net/` 回應 HTTP 200，憑證驗證通過，Funnel 未啟用。正式 `cardputer` plugin 必須由 `claude-cardputer` session 啟動。
+- 私人 `tailscale serve --bg 8790` 已設定。以本機測試 HTTP 服務驗證 `https://<host>.<tailnet>.ts.net/` 回應 HTTP 200，憑證驗證通過，Funnel 未啟用。正式 `cardputer` plugin 必須由 `claude-cardputer` session 啟動。
 - 2026-11-01 下載 `0xdilo/tailscale-esp32` 並執行 `cargo test --locked`：49 個測試通過，1 個需要即時 DERP 網路的測試被忽略。
 - 已安裝 Espressif Rust Xtensa toolchain，將上游 Wake-on-LAN 參考韌體以本目錄的 `sdkconfig.defaults` 改成 8 MB flash、無 PSRAM，並成功為 `xtensa-esp32s3-espidf` 交叉編譯。產出的 ESP-IDF `sdkconfig` 已核對為 `CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y`、`CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y`，且未啟用 `CONFIG_SPIRAM`。這是使用佔位 Wi-Fi 與金鑰的**編譯驗證**，尚未在 Cardputer 開機或連上 tailnet。
 - 2026-11-01 晚間 Cardputer ADV 已接上 `/dev/ttyACM1`（Espressif USB JTAG/serial，MAC `E8:F6:0A:98:36:B4`），使用者在 `uucp` 群組可直接存取。目前裝置上仍是 Arduino 版 `cardputer-claude` 韌體，尚未燒錄 Rust 映像。
