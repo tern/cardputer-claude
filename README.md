@@ -46,13 +46,14 @@ tailscale funnel --bg 8790      # → https://<主機>.<tailnet>.ts.net
 ## Cardputer ADV 端
 
 1. microSD（FAT32）根目錄放兩個檔（範本在 `firmware/sd/`）：
-   - `/wifi.txt`：SSID、密碼 兩行一組，可放多組（也可以不放，開機直接用 `:wifi` 選單設定）
+   - `/claude-wifi.txt`：SSID、密碼兩行一組，可放多組（也可以不放，開機直接用 `:wifi` 選單設定）。此檔與 Bruce 的 `/wifi.txt` 分開。
    - `/claude.txt`：第 1 行 `https://<主機>.<tailnet>.ts.net`、第 2 行 token
-2. 燒錄：
+2. 建置：
    ```bash
-   cd firmware && pio run -t upload      # 第一次可能要：電源 OFF → 按住 G0 → 開機 進 download mode
+   cd firmware && pio run -e cardputer-adv
    ```
-3. 開機後畫面：`WiFi: ...` → `online` → `= 主機:目前目錄`。打字、Enter 送出。
+3. 將 `firmware/.pio/build/cardputer-adv/firmware.bin` 當作 app binary 交給 Launcher 安裝：可放進 microSD 後選 `SD` → 檔案 → `Install`，也可使用 Launcher WebUI 或 serial flasher。**不要用 `pio run -t upload`**；那會直接燒錄整台裝置，覆蓋 Launcher 的安裝配置。Launcher 的 [PlatformIO 安裝說明](https://github.com/bmorcelli/Launcher/wiki/Obtaining-binaries-to-launch#platformio) 也採用此 app binary。
+4. 開機後畫面：`WiFi: ...` → `online` → `= 主機:目前目錄`。打字、Enter 送出。
 
 | 輸入 | 作用 |
 | --- | --- |
@@ -60,7 +61,9 @@ tailscale funnel --bg 8790      # → https://<主機>.<tailnet>.ts.net
 | `y` / `n` | 回答最新的權限詢問 |
 | `:ping` | 顯示連到哪台主機、哪個目錄 |
 | `:clear` | 清畫面 |
-| `:wifi` | 開 WiFi 選單：掃描 → `fn+;`/`fn+.` 上下 → Enter → 輸入密碼 → Enter；`` ` `` 返回。連上就存進 `/wifi.txt`（最多 8 組，開機自動挑有訊號的） |
+| `:wifi` | 開 WiFi 選單：掃描 → `fn+;`/`fn+.` 上下 → Enter → 輸入密碼 → Enter；`` ` `` 返回。連上就存進 `/claude-wifi.txt`（最多 8 組，開機自動挑有訊號的） |
+
+語音輸入仍是實驗功能，轉錄可能把雜音誤判成指令，因此預設停用。要自行測試時，需在主機啟動前同時設定 `CARDPUTER_VOICE_ENABLED=1` 與 `GEMINI_API_KEY`；Arduino 韌體的語音轉錄文字會直接送進 Claude Code；server 另支援 `/api/voice?confirm=1`（只回傳轉錄文字、不送出）與 `/api/send?voice=1`，原生 Rust 韌體（`tailscale-esp32-cardputer` 的 `examples/cardputer-probe`）用它在裝置上確認後才送出，且只在 `/api/ping` 回報 `voice_confirm` 時啟用語音。
 
 螢幕只有 240×135，plugin 已經在 MCP instructions 裡告訴 Claude：回覆要短、純文字、
 可用繁中；細節留在終端機或寫進檔案再告訴你位置。

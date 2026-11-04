@@ -1,9 +1,8 @@
-# SD card files
+# microSD 設定檔
 
-Copy these two files to the root of a FAT32 microSD card in the Cardputer.
+將以下設定檔放在 Cardputer 的 FAT32 microSD 根目錄。
 
-`/wifi.txt` — ssid / password line pairs, up to 8 networks, first match in range wins.
-Optional: the `:wifi` picker on the device writes this file for you.
+`/claude-wifi.txt` — SSID 與密碼每兩行一組，最多 8 組；也可以在裝置上用 `:wifi` 建立。使用獨立檔名，避免改寫 Bruce 的 `/wifi.txt`。
 ```
 MyHotspotSSID
 hotspot-password
@@ -17,7 +16,4 @@ https://steamdeck.tail1234.ts.net
 <token from ~/.claude/channels/cardputer/token>
 ```
 
-Optional third line in `/claude.txt`: `insecure` skips TLS certificate
-verification (needed for cloudflared quick tunnels; not needed for Tailscale
-Funnel, whose Let's Encrypt chain is built in). A plain `http://` URL works
-too for LAN testing when the server is started with `CARDPUTER_HOST=0.0.0.0`.
+`/claude.txt` 可加第三行 `insecure` 以略過 TLS 憑證驗證。Tailscale Funnel 不需要此設定。區網測試可使用 `http://`，主機端需設 `CARDPUTER_HOST=0.0.0.0`。

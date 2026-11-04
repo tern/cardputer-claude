@@ -5,8 +5,11 @@
 // long-polls /api/poll and prints replies / permission prompts on screen.
 // Answer a permission prompt by typing just `y` or `n`.
 //
+// Hold `opt` to talk: the mic streams 16 kHz PCM to /api/voice while the key
+// is down; the server transcribes it (Gemini) and forwards it to Claude.
+//
 // Local commands: `:ping` (who am I talking to), `:clear`, `:wifi` (on-device
-// network picker: scan, choose, type the password; saved to /wifi.txt).
+// network picker: scan, choose, type the password; saved to /claude-wifi.txt).
 
 #include <M5Cardputer.h>
 #include <SPI.h>
@@ -34,9 +37,10 @@ struct WifiProfile {
 };
 
 #define MAX_WIFI_PROFILES 8
+#define WIFI_CONFIG_PATH "/claude-wifi.txt"
 
 struct Config {
-    std::vector<WifiProfile> wifi;  // /wifi.txt: ssid/password line pairs, most recent first
+    std::vector<WifiProfile> wifi;  // /claude-wifi.txt: ssid/password line pairs, most recent first
     String baseUrl, token;
     bool insecure = false;
 } cfg;
@@ -100,13 +104,13 @@ bool readLines(const char *path, String lines[], int maxLines) {
 void loadWifiProfiles() {
     cfg.wifi.clear();
     String w[MAX_WIFI_PROFILES * 2];
-    if (!readLines("/wifi.txt", w, MAX_WIFI_PROFILES * 2)) return;
+    if (!readLines(WIFI_CONFIG_PATH, w, MAX_WIFI_PROFILES * 2)) return;
     for (int i = 0; i + 1 < MAX_WIFI_PROFILES * 2 && !w[i].isEmpty(); i += 2) cfg.wifi.push_back({w[i], w[i + 1]});
 }
 
 bool saveWifiProfiles() {
-    SD.remove("/wifi.txt");
-    File f = SD.open("/wifi.txt", FILE_WRITE);
+    SD.remove(WIFI_CONFIG_PATH);
+    File f = SD.open(WIFI_CONFIG_PATH, FILE_WRITE);
     if (!f) return false;
     for (auto &p : cfg.wifi) {
         f.println(p.ssid);
@@ -122,12 +126,12 @@ void rememberWifi(const String &ssid, const String &pass) {
         if (cfg.wifi[i].ssid == ssid) cfg.wifi.erase(cfg.wifi.begin() + i--);
     cfg.wifi.insert(cfg.wifi.begin(), {ssid, pass});
     while (cfg.wifi.size() > MAX_WIFI_PROFILES) cfg.wifi.pop_back();
-    if (!saveWifiProfiles()) showLine("! could not write /wifi.txt", TFT_RED);
+    if (!saveWifiProfiles()) showLine("! could not write /claude-wifi.txt", TFT_RED);
 }
 
 bool loadConfig() {
     loadWifiProfiles();
-    if (cfg.wifi.empty()) showLine("No /wifi.txt yet - use :wifi", TFT_YELLOW);
+    if (cfg.wifi.empty()) showLine("No /claude-wifi.txt yet - use :wifi", TFT_YELLOW);
 
     String c[3];
     if (!readLines("/claude.txt", c, 3)) {
@@ -378,6 +382,146 @@ void pollTask(void *) {
     }
 }
 
+
+// ---- push-to-talk ----------------------------------------------------------
+// Streams raw PCM as a chunked HTTP body over its own TLS connection while
+// `opt` is held, then prints the transcript the server sends back.
+#define VOICE_RATE 16000
+#define VOICE_CHUNK 640  // samples per buffer = 40 ms
+static int16_t voiceBuf[3][VOICE_CHUNK];
+
+bool voiceSupported = false;  // from /api/ping
+
+struct Url {
+    bool https;
+    String host;
+    int port;
+};
+
+Url parseBase() {
+    Url u;
+    u.https = cfg.baseUrl.startsWith("https://");
+    String rest = cfg.baseUrl.substring(u.https ? 8 : 7);
+    int slash = rest.indexOf('/');
+    if (slash >= 0) rest = rest.substring(0, slash);
+    int colon = rest.indexOf(':');
+    u.port = u.https ? 443 : 80;
+    if (colon >= 0) {
+        u.port = rest.substring(colon + 1).toInt();
+        rest = rest.substring(0, colon);
+    }
+    u.host = rest;
+    return u;
+}
+
+void writeChunk(WiFiClient &c, const uint8_t *data, size_t len) {
+    if (!len) return;
+    c.printf("%x\r\n", (unsigned)len);
+    c.write(data, len);
+    c.print("\r\n");
+}
+
+void drawMicLevel(int peak, const char *label) {
+    auto &d = M5Cardputer.Display;
+    int y = d.height() - INPUT_H;
+    d.fillRect(0, y, d.width(), INPUT_H, 0x2104);
+    d.setTextColor(TFT_RED, 0x2104);
+    d.setCursor(2, y + 2);
+    d.print(label);
+    int bars = std::min(20, peak / 800);
+    int x = d.getCursorX() + 6;
+    for (int i = 0; i < bars; ++i) d.fillRect(x + i * 6, y + 3, 4, INPUT_H - 6, i < 14 ? TFT_GREEN : TFT_ORANGE);
+}
+
+// Blocks until opt is released. Runs on the UI task (keyboard is refreshed
+// inside the loop so the release is seen).
+void voiceCapture() {
+    if (!voiceSupported) {
+        showLine("! voice: no GEMINI_API_KEY on host", TFT_RED);
+        return;
+    }
+    Url u = parseBase();
+    WiFiClientSecure tls;
+    WiFiClient plain;
+    if (cfg.insecure) tls.setInsecure();
+    else tls.setCACert(ISRG_ROOT_X1);
+    WiFiClient &c = u.https ? static_cast<WiFiClient &>(tls) : plain;
+
+    drawMicLevel(0, "mic: connecting");
+    if (!c.connect(u.host.c_str(), u.port)) {
+        showLine("! voice: connect failed", TFT_RED);
+        drawInput();
+        return;
+    }
+    c.print("POST /api/voice?rate=" + String(VOICE_RATE) + " HTTP/1.1\r\n"
+            "Host: " + u.host + "\r\n"
+            "Authorization: Bearer " + cfg.token + "\r\n"
+            "Content-Type: audio/L16; rate=" + String(VOICE_RATE) + "\r\n"
+            "Transfer-Encoding: chunked\r\n"
+            "Connection: close\r\n\r\n");
+
+    M5Cardputer.Speaker.end();
+    M5Cardputer.Mic.begin();
+    // Two slots in the mic queue: queue two buffers, then each further
+    // record() returns once the oldest one is full and ready to send.
+    M5Cardputer.Mic.record(voiceBuf[0], VOICE_CHUNK, VOICE_RATE);
+    M5Cardputer.Mic.record(voiceBuf[1], VOICE_CHUNK, VOICE_RATE);
+    int i = 2;
+    unsigned long started = millis();
+    size_t sent = 0;
+    bool held = true;
+    while (held) {
+        M5Cardputer.Mic.record(voiceBuf[i], VOICE_CHUNK, VOICE_RATE);
+        int16_t *done = voiceBuf[(i + 1) % 3];
+        int peak = 0;
+        for (int k = 0; k < VOICE_CHUNK; ++k) peak = std::max(peak, abs((int)done[k]));
+        writeChunk(c, (const uint8_t *)done, VOICE_CHUNK * 2);
+        sent += VOICE_CHUNK;
+        i = (i + 1) % 3;
+        if (sent % (VOICE_CHUNK * 5) == 0) drawMicLevel(peak, "REC");
+        M5Cardputer.update();
+        held = M5Cardputer.Keyboard.isPressed() && M5Cardputer.Keyboard.keysState().opt;
+        if (millis() - started > 120000) held = false;  // 2 min cap
+    }
+    while (M5Cardputer.Mic.isRecording()) delay(5);
+    writeChunk(c, (const uint8_t *)voiceBuf[(i + 2) % 3], VOICE_CHUNK * 2);
+    writeChunk(c, (const uint8_t *)voiceBuf[i], VOICE_CHUNK * 2);
+    c.print("0\r\n\r\n");
+    M5Cardputer.Mic.end();
+
+    drawMicLevel(0, "mic: transcribing");
+    // The server answers only after Gemini is done, so first wait for any
+    // bytes, then read status line, headers and the JSON body (it closes
+    // the connection when finished).
+    unsigned long t0 = millis();
+    while (!c.available() && c.connected() && millis() - t0 < 45000) delay(20);
+    String status = c.readStringUntil('\n');
+    for (;;) {
+        String h = c.readStringUntil('\n');
+        if (h == "\r" || h.isEmpty()) break;
+    }
+    String body;
+    t0 = millis();
+    while ((c.connected() || c.available()) && millis() - t0 < 10000) {
+        while (c.available()) body += (char)c.read();
+        if (body.endsWith("}")) break;
+        delay(5);
+    }
+    c.stop();
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body)) {
+        showLine("! voice: bad reply " + clip(status, 30), TFT_RED);
+    } else if (doc["error"]) {
+        showLine("! voice: " + clip((const char *)doc["error"], 80), TFT_RED);
+    } else if (String((const char *)(doc["text"] | "")).isEmpty()) {
+        showLine("mic: (nothing heard)", TFT_DARKGREY);
+    } else {
+        showLine("mic> " + String((const char *)doc["text"]), TFT_CYAN);
+    }
+    drawInput();
+}
+
 // ---- UI task -------------------------------------------------------------
 void ping() {
     String out;
@@ -396,6 +540,7 @@ void ping() {
     if (!deserializeJson(doc, out)) {
         showLine(String("= ") + (const char *)(doc["host"] | "?") + ":" + (const char *)(doc["cwd"] | "?"), TFT_CYAN);
         if (doc["pending"].size() > 0) permPending = true;
+        voiceSupported = doc["voice"] | false;
         // Fresh boot: replay only the last few events instead of the server's whole buffer.
         long s = doc["seq"] | 0L;
         if (lastSeq == 0 && s > 3) lastSeq = s - 3;
@@ -475,6 +620,11 @@ void uiLoop() {
     const unsigned long debounceMs = 120;
     for (;;) {
         M5Cardputer.update();
+
+        if (mode == Mode::Chat && M5Cardputer.Keyboard.isPressed() && M5Cardputer.Keyboard.keysState().opt) {
+            voiceCapture();
+            continue;
+        }
 
         if (M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) {
             unsigned long now = millis();

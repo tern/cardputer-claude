@@ -1,0 +1,32 @@
+# 僅供「未啟用 Tailnet Lock」的測試 tailnet 使用。
+# 目前 Steam Deck 所在 tailnet 已啟用 Tailnet Lock；此元件無法加入，請勿用它測試該網路。
+# 獨立的 tailnet 連線實驗韌體；不含 Claude Code UI 與語音功能。
+# 使用 Cardputer ADV 的 ESP32-S3FN8（8 MB flash、無 PSRAM）。
+esphome:
+  name: cardputer-adv-tailnet-probe
+  friendly_name: Cardputer ADV tailnet probe
+
+esp32:
+  board: m5stack-stamps3
+  flash_size: 8MB
+  framework:
+    type: esp-idf
+
+packages:
+  tailscale:
+    url: https://github.com/Csontikka/esphome-tailscale
+    ref: main
+    files: [packages/tailscale/tailscale-core.yaml]
+
+tailscale:
+  auth_key: !secret tailscale_auth_key
+  hostname: cardputer-adv-probe
+  max_peers: 4
+  disable_telemetry: true
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+logger:
+  level: INFO
